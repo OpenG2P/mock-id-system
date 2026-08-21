@@ -1,0 +1,33 @@
+# mock-id-system — chart build & publish on GitLab.
+#
+# CHART-ONLY repo. The images this chart deploys (mosipid/mock-identity-system,
+# mosipid/postgres-init, bitnami/bitnami-shell) are UPSTREAM third-party images
+# consumed as-is: we neither build nor retag them, and their tags in values.yaml
+# are left exactly as upstream published them. So IMAGES is empty and
+# CHART_IMAGE_PATHS is empty — nothing in values.yaml gets stamped.
+#
+# Everything else is the standard central pipeline: one immutable version per
+# commit (0.0.0-develop.NN on develop, N.N.N-rc.M on a release line, N.N.N on a
+# bare tag), the chart published to the shared catalogue, and a changelog page
+# published per version.
+#
+#   images -> none
+#   chart  -> openg2p/charts Helm registry   (shared catalogue)
+
+include:
+  - project: 'openg2p/packaging'
+    ref: v1
+    file: '/ci/gitlab/build-publish.yml'
+
+variables:
+  PACKAGING_REF: v1
+
+  # No images are built here — see the header.
+  IMAGES: "[]"
+
+  CHART_PATH: helm/mock-identity-system
+  # Empty on purpose: the image tags in values.yaml are upstream versions, not ours.
+  # Stamping our derived version onto them would point the chart at images that do
+  # not exist.
+  CHART_IMAGE_PATHS: '[]'
+  CHART_GITLAB_PROJECT: openg2p/charts

@@ -1,0 +1,24 @@
+apiVersion: v2
+name: mock-identity-system
+description: A Helm chart for MOSIP Mock Identity System module
+type: application
+# Placeholder. The pipeline packages with --version/--app-version set to the version
+# it derives for the commit (0.0.0-develop.NN on develop, N.N.N-rc.M / N.N.N on a
+# release line), so this value is never what gets published.
+version: 0.0.0-develop
+appVersion: 0.9.3
+dependencies:
+- name: common
+  repository: https://openg2p.github.io/openg2p-helm
+  version: 2.30.0
+home: https://mosip.io
+keywords:
+  - mosip
+  - esignet
+  - mock-identity-system
+maintainers:
+  - email: info@openg2p.org
+    name: OpenG2P
+icon: https://openg2p.github.io/openg2p-helm/openg2p-logo.png
+annotations:
+  catalog.cattle.io/display-name: "Mock Identity System"
