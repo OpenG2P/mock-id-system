@@ -76,6 +76,14 @@ spec:
               value: {{ .Values.identitySeed.language | quote }}
             - name: SEED_PIN
               value: {{ .Values.identitySeed.defaultPin | quote }}
+            - name: SEED_PHOTO
+              value: {{ .Values.identitySeed.defaultEncodedPhoto | quote }}
+            - name: SEED_BIO_FORMAT
+              value: {{ .Values.identitySeed.biometrics.format | quote }}
+            - name: SEED_BIO_VERSION
+              value: {{ .Values.identitySeed.biometrics.version | quote }}
+            - name: SEED_BIO_VALUE
+              value: {{ .Values.identitySeed.biometrics.value | quote }}
           command: ["/bin/sh", "-c"]
           args:
             - |
@@ -91,7 +99,9 @@ spec:
               # :'variables' when reading a script, so -c left them literal and the
               # statement failed to parse.
               psql -v ON_ERROR_STOP=1 -tA -F"$(printf '\t')" \
-                   -v lang="$SEED_LANG" -v pin="$SEED_PIN" > /data/identities.tsv <<'SQL'
+                   -v lang="$SEED_LANG" -v pin="$SEED_PIN" -v photo="$SEED_PHOTO" \
+                   -v biofmt="$SEED_BIO_FORMAT" -v biover="$SEED_BIO_VERSION" -v bioval="$SEED_BIO_VALUE" \
+                   > /data/identities.tsv <<'SQL'
               SELECT national_id,
                      json_build_object(
                        'requestTime', to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
@@ -105,7 +115,13 @@ spec:
                                               ELSE json_build_array(json_build_object('language', :'lang', 'value', gender)) END,
                          'dateOfBirth',  to_char(birth_date,'YYYY/MM/DD'),
                          'phone',        phone,
-                         'locale',       :'lang'
+                         'locale',       :'lang',
+                         'encodedPhoto', :'photo',
+                         'individualBiometrics', json_build_object(
+                            'format',  :'biofmt',
+                            'version', (:'biover')::numeric,
+                            'value',   :'bioval'
+                         )
                        ))
                      )
               FROM g2p_sample_individuals
@@ -154,21 +170,29 @@ spec:
                 # go into a URL path raw.
                 enc=$(echo "$id" | sed 's/ /%20/g')
 
-                code=$(curl -s -o /dev/null -w '%{http_code}' "$API/identity/$enc" || echo 000)
-                if [ "$code" = "200" ]; then
-                  skipped=$((skipped+1))
-                  continue
-                fi
+                # This API answers HTTP 200 even when the identity does not exist —
+                # the outcome is in the BODY ("response":null plus an errors
+                # array). Checking the status code alone reported every missing
+                # identity as already present, so a run "succeeded" having created
+                # nothing. Inspect the body, for the lookup AND for the write.
+                body=$(curl -s "$API/identity/$enc" 2>/dev/null | tr -d ' ')
+                case "$body" in
+                  *'"response":null'*|*errorCode*) : ;;   # absent -> create it
+                  '')                              : ;;   # no answer -> try to create
+                  *) skipped=$((skipped+1)); continue ;;  # present -> leave alone
+                esac
 
-                out=$(printf '%s' "$payload" | curl -s -w '\n%{http_code}' -X POST \
-                        -H 'Content-Type: application/json' --data @- "$API/identity" || true)
-                status=$(printf '%s' "$out" | tail -n1)
-                if [ "$status" = "200" ] || [ "$status" = "201" ]; then
-                  created=$((created+1))
-                else
-                  failed=$((failed+1))
-                  echo "[identity-seed] FAILED $id -> HTTP $status: $(printf '%s' "$out" | head -n1)"
-                fi
+                out=$(printf '%s' "$payload" | curl -s -X POST \
+                        -H 'Content-Type: application/json' --data @- "$API/identity" 2>/dev/null | tr -d ' ')
+                case "$out" in
+                  *errorCode*|'')
+                    failed=$((failed+1))
+                    echo "[identity-seed] FAILED $id -> $(printf '%s' "$out" | cut -c1-160)"
+                    ;;
+                  *)
+                    created=$((created+1))
+                    ;;
+                esac
               done < /data/identities.tsv
 
               echo "[identity-seed] created=$created skipped(existing)=$skipped failed=$failed"

@@ -453,6 +453,18 @@ identitySeed:
   language: eng
   defaultPin: "222222"
 
+  # The identity API REQUIRES both of these — a request without them is rejected
+  # with invalid_encoded_photo / invalid_biometrics. Master Data holds neither,
+  # so a placeholder stands in: these identities exist to be authenticated
+  # against (OTP), not to be looked at. Replace defaultEncodedPhoto with the real
+  # portrait once Master Data carries one — the printed credential and the
+  # claim-169 QR will want it.
+  defaultEncodedPhoto: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AKp//2Q=="
+  biometrics:
+    format: cbeff
+    version: 1
+    value: individualBiometrics_bio_CBEFF
+
   psqlImage:
     repository: postgres
     tag: "15-alpine"
