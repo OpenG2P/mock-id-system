@@ -102,11 +102,17 @@ spec:
                    -v lang="$SEED_LANG" -v pin="$SEED_PIN" -v photo="$SEED_PHOTO" \
                    -v biofmt="$SEED_BIO_FORMAT" -v biover="$SEED_BIO_VERSION" -v bioval="$SEED_BIO_VALUE" \
                    > /data/identities.tsv <<'SQL'
-              SELECT national_id,
+              -- Whitespace is stripped here as well as in the Master Data
+              -- loader. eSignet matches individualId EXACTLY, so a grouped ID
+              -- ("4028 6914 8701") seeded here can only ever be authenticated
+              -- by typing the spaces, and the registry's foundational_id has to
+              -- carry the identical string. Normalising on the way in means an
+              -- older MDS still holding grouped IDs seeds usable identities.
+              SELECT regexp_replace(national_id, '\s', '', 'g') AS national_id,
                      json_build_object(
                        'requestTime', to_char(now() AT TIME ZONE 'utc','YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
                        'request', json_strip_nulls(json_build_object(
-                         'individualId', national_id,
+                         'individualId', regexp_replace(national_id, '\s', '', 'g'),
                          'pin',          :'pin',
                          'name',         json_build_array(json_build_object('language', :'lang', 'value', full_name)),
                          'givenName',    CASE WHEN given_name IS NULL THEN NULL
@@ -127,7 +133,7 @@ spec:
               FROM g2p_sample_individuals
               WHERE national_id IS NOT NULL
                 AND birth_date  IS NOT NULL
-              ORDER BY national_id;
+              ORDER BY 1;
               SQL
 
               echo "[identity-seed] $(wc -l < /data/identities.tsv) identities read from master-data."
