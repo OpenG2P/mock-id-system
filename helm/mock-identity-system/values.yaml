@@ -409,6 +409,59 @@ artifactoryInstallationName: '{{ .Release.Name }}-artifactory'
 postgresqlInstallationName: '{{ .Release.Name }}-postgresql'
 softhsmInstallationName: '{{ .Release.Name }}-softhsm'
 
+# ---------------------------------------------------------------------------
+# identitySeed — load the registries' people into this mock identity system.
+#
+# eSignet authenticates a beneficiary here, and the registry then checks the
+# authenticated subject against the record's foundational_id. Master Data Service
+# is the one source both sides read: the registries seed themselves from
+# g2p_sample_individuals with foundational_id = national_id, so seeding from the
+# same column is what makes an authentication actually match a record.
+#
+# Left ON by default — an unseeded identity system silently fails every
+# authentication, which is far harder to diagnose than a seed job that ran.
+# Turn it off for an environment using a real foundational ID system.
+# ---------------------------------------------------------------------------
+identitySeed:
+  enabled: true
+  backoffLimit: 4
+  ttlSecondsAfterFinished: 600
+
+  commonAnnotations:
+    # Weight 10 puts this after postgres-init (weight 0), which creates the
+    # schema this system needs before it will serve at all. Also runs on upgrade
+    # so a re-seeded master-data propagates here.
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+
+  # This system's own API, in-cluster. Identities are POSTed rather than written
+  # straight to the table so the service validates and serialises them itself.
+  apiBaseUrl: 'http://{{ template "common.names.fullname" . }}:{{ .Values.service.port }}/v1/mock-identity-system'
+  readinessTimeoutSeconds: 300
+
+  # Where the people come from.
+  masterData:
+    host: commons-postgresql
+    port: 5432
+    database: master_data
+    user: master_data_user
+    existingSecret: master-data
+    existingSecretKey: master-data-db-user
+
+  # Applied to every seeded identity.
+  language: eng
+  defaultPin: "222222"
+
+  psqlImage:
+    repository: postgres
+    tag: "15-alpine"
+    pullPolicy: IfNotPresent
+  curlImage:
+    repository: curlimages/curl
+    tag: "8.11.0"
+    pullPolicy: IfNotPresent
+
 postgresInit:
   enabled: true
   image:
